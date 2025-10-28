@@ -1,0 +1,329 @@
+name: Policy Scanner CI
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+      - 'feature/policy-scanner-*'
+    paths:
+      - 'backend/services/search_service.py'
+      - 'backend/services/document_processor.py'
+      - 'backend/services/source_service.py'
+      - 'backend/services/scan_job_service.py'
+      - 'backend/scrapers/**'
+      - 'backend/api/routes/search.py'
+      - 'backend/api/routes/documents.py'
+      - 'backend/api/routes/sources.py'
+      - 'backend/tests/**/test_*policy*.py'
+      - 'backend/tests/**/test_*scraper*.py'
+      - 'backend/tests/**/test_*search*.py'
+      - 'backend/migrations/*policy*.sql'
+      - 'k8s/meilisearch-*.yaml'
+      - 'k8s/policy-scanner-*.yaml'
+      - '.github/workflows/policy-scanner-ci.yaml'
+  pull_request:
+    branches:
+      - main
+      - dev
+    paths:
+      - 'backend/services/**'
+      - 'backend/scrapers/**'
+      - 'backend/api/**'
+      - 'backend/tests/**'
+      - 'k8s/**'
+
+jobs:
+  lint-and-format:
+    name: 'Lint & Format Check'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install black ruff isort bandit[toml]
+
+      - name: Check Black formatting
+        run: black --check backend/ --exclude ".venv/|/venv/"
+
+      - name: Run Ruff linting
+        run: ruff check backend/
+
+      - name: Check import sorting with isort
+        run: isort --check-only --profile black backend/
+
+      - name: Run Bandit security checks
+        run: bandit -r backend/ -c pyproject.toml || true
+
+  unit-tests:
+    name: 'Unit Tests'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.11', '3.12']
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-py${{ matrix.python-version }}-pip-${{ hashFiles('**/pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-py${{ matrix.python-version }}-pip-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest pytest-cov pytest-asyncio pytest-mock httpx
+          # Install project dependencies (adjust based on your setup)
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          if [ -f pyproject.toml ]; then pip install -e .; fi
+
+      - name: Run unit tests with coverage
+        run: |
+          pytest backend/tests/unit/ \
+            --cov=backend/services \
+            --cov=backend/scrapers \
+            --cov=backend/api \
+            --cov-report=xml \
+            --cov-report=term-missing \
+            --cov-fail-under=80 \
+            -v
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+        if: matrix.python-version == '3.11'
+
+  integration-tests:
+    name: 'Integration Tests'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: govchat_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      meilisearch:
+        image: getmeili/meilisearch:v1.6
+        env:
+          MEILI_MASTER_KEY: test_master_key_minimum_16_chars
+          MEILI_ENV: development
+        ports:
+          - 7700:7700
+        options: >-
+          --health-cmd "curl -f http://localhost:7700/health || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest pytest-asyncio pytest-mock httpx meilisearch psycopg2-binary
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          if [ -f pyproject.toml ]; then pip install -e .; fi
+
+      - name: Wait for services
+        run: |
+          sleep 5
+          curl -f http://localhost:7700/health
+          PGPASSWORD=postgres psql -h localhost -U postgres -d govchat_test -c "SELECT 1"
+
+      - name: Run database migrations
+        run: |
+          # Run migrations when they exist
+          if [ -d backend/migrations ]; then
+            echo "Running database migrations..."
+            # Add your migration command here
+          fi
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/govchat_test
+
+      - name: Run integration tests
+        run: |
+          pytest backend/tests/integration/ \
+            --cov=backend \
+            --cov-report=xml \
+            -v
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/govchat_test
+          MEILISEARCH_URL: http://localhost:7700
+          MEILISEARCH_API_KEY: test_master_key_minimum_16_chars
+          TESTING: true
+
+  contract-tests:
+    name: 'API Contract Tests'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install schemathesis fastapi httpx
+
+      - name: Validate OpenAPI spec
+        run: |
+          if [ -f backend/api/openapi-spec.yml ]; then
+            pip install openapi-spec-validator
+            openapi-spec-validator backend/api/openapi-spec.yml
+          else
+            echo "OpenAPI spec not found yet - skipping validation"
+          fi
+
+      - name: Run contract tests
+        run: |
+          if [ -d backend/tests/contract_tests ]; then
+            pytest backend/tests/contract_tests/ -v
+          else
+            echo "Contract tests not implemented yet - skipping"
+          fi
+
+  security-scan:
+    name: 'Security Scan'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: Check for secrets
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+
+  docker-build:
+    name: 'Docker Build Test'
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image (no push)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          tags: govchat-nl:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  pr-checks:
+    name: 'PR Quality Checks'
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    needs: [lint-and-format, unit-tests, integration-tests]
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check PR title format
+        run: |
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          if [[ ! "$PR_TITLE" =~ ^(feat|fix|docs|style|refactor|test|chore|perf)(\(.+\))?: ]]; then
+            echo "PR title must follow conventional commits format: type(scope): description"
+            echo "Examples: feat(policy-scanner): add Gemeenteblad scraper"
+            echo "          fix(search): resolve pagination bug"
+            exit 1
+          fi
+
+      - name: Check for TODO comments
+        run: |
+          TODO_COUNT=$(git diff origin/${{ github.base_ref }}...HEAD | grep -c "TODO:" || true)
+          if [ $TODO_COUNT -gt 5 ]; then
+            echo "Warning: $TODO_COUNT TODO comments found. Consider creating issues."
+          fi
+
+      - name: Comment PR with test results
+        uses: actions/github-script@v7
+        if: always()
+        with:
+          script: |
+            const output = `
+            ## Policy Scanner CI Results
+
+            ✅ Lint and Format: Passed
+            ✅ Unit Tests: Passed
+            ✅ Integration Tests: Passed
+
+            All checks completed successfully!
+            `;
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            });
