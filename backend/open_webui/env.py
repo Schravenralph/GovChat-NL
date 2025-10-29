@@ -326,6 +326,38 @@ REDIS_SENTINEL_HOSTS = os.environ.get("REDIS_SENTINEL_HOSTS", "")
 REDIS_SENTINEL_PORT = os.environ.get("REDIS_SENTINEL_PORT", "26379")
 
 ####################################
+# POLICY SCANNER - MEILISEARCH
+####################################
+
+# Meilisearch connection settings
+MEILISEARCH_URL = os.environ.get("MEILISEARCH_URL", "http://localhost:7700")
+MEILISEARCH_API_KEY = os.environ.get("MEILISEARCH_API_KEY", "")
+MEILISEARCH_INDEX_NAME = os.environ.get("MEILISEARCH_INDEX_NAME", "policy_documents")
+
+# Indexing settings
+INDEXING_BATCH_SIZE = os.environ.get("INDEXING_BATCH_SIZE", "100")
+try:
+    INDEXING_BATCH_SIZE = int(INDEXING_BATCH_SIZE)
+    if INDEXING_BATCH_SIZE < 1:
+        INDEXING_BATCH_SIZE = 100
+except ValueError:
+    INDEXING_BATCH_SIZE = 100
+    log.info(f"Invalid INDEXING_BATCH_SIZE value, defaulting to {INDEXING_BATCH_SIZE}")
+
+# Document processing settings
+DOCUMENT_MAX_CHUNK_SIZE = os.environ.get("DOCUMENT_MAX_CHUNK_SIZE", "10000")
+try:
+    DOCUMENT_MAX_CHUNK_SIZE = int(DOCUMENT_MAX_CHUNK_SIZE)
+    if DOCUMENT_MAX_CHUNK_SIZE < 1000:
+        DOCUMENT_MAX_CHUNK_SIZE = 10000
+except ValueError:
+    DOCUMENT_MAX_CHUNK_SIZE = 10000
+    log.info(f"Invalid DOCUMENT_MAX_CHUNK_SIZE value, defaulting to {DOCUMENT_MAX_CHUNK_SIZE}")
+
+# Document storage path (local or MinIO/S3)
+DOCUMENT_STORAGE_PATH = os.environ.get("DOCUMENT_STORAGE_PATH", "/tmp/policy_documents")
+
+####################################
 # UVICORN WORKERS
 ####################################
 

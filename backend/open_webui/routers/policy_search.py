@@ -72,58 +72,141 @@ async def search_documents(
     user=Depends(get_verified_user),
 ):
     """
-    Search policy documents with filters.
-    NOTE: This is a STUB implementation for Phase 1.
-    Actual search integration with Meilisearch will be added in Phase 2.
+    Search policy documents with filters using Meilisearch.
 
-    For now, this endpoint:
-    - Accepts search requests
-    - Records search queries for analytics
-    - Returns basic filtered results from PostgreSQL
-    - Returns empty facets
+    Features:
+    - Full-text search with typo tolerance
+    - Filtering by municipality, category, date range, document type
+    - Faceted search results
+    - Sorting options
+    - Pagination
+    - Analytics tracking
     """
     start_time = time.time()
 
     try:
-        # Convert filters to database query parameters
-        source_id = request.filters.sources[0] if request.filters and request.filters.sources else None
-        municipality = request.filters.municipalities[0] if request.filters and request.filters.municipalities else None
+        # Import here to avoid circular imports
+        from open_webui.services.meilisearch_service import get_meilisearch_service
 
-        # Fetch documents from database (basic filtering only)
-        offset = (request.page - 1) * request.limit
-        documents = PolicyDocuments.get_documents(
-            source_id=source_id,
-            municipality=municipality,
-            status="indexed",  # Only return indexed documents
+        # Get Meilisearch service
+        meili = get_meilisearch_service()
+        await meili.connect()
+
+        # Build filters dict
+        filters = {}
+        if request.filters:
+            if request.filters.municipalities:
+                filters['municipality'] = request.filters.municipalities
+            if request.filters.categories:
+                filters['category'] = request.filters.categories
+            if request.filters.document_type:
+                filters['document_type'] = request.filters.document_type
+            if request.filters.sources:
+                filters['source_id'] = request.filters.sources[0]  # Single source for now
+            if request.filters.date_from:
+                filters['date_from'] = request.filters.date_from
+            if request.filters.date_to:
+                filters['date_to'] = request.filters.date_to
+
+        # Build sort
+        sort_list = None
+        if request.sort == 'date_desc':
+            sort_list = ['publication_date:desc']
+        elif request.sort == 'date_asc':
+            sort_list = ['publication_date:asc']
+        elif request.sort == 'title':
+            sort_list = ['title:asc']
+        # 'relevance' = None (default Meilisearch ranking)
+
+        # Execute search
+        log.info(f"Searching: query='{request.query}', filters={filters}, page={request.page}")
+        results = await meili.search(
+            query=request.query,
+            filters=filters,
+            page=request.page,
             limit=request.limit,
-            offset=offset,
+            sort=sort_list
+        )
+
+        # Convert Meilisearch results to PolicyDocumentModel
+        # Note: Meilisearch returns raw dicts, we need to convert them
+        documents = []
+        for hit in results['hits']:
+            # Convert ISO date string back to date object if needed
+            pub_date = None
+            if hit.get('publication_date'):
+                try:
+                    from datetime import date
+                    pub_date = date.fromisoformat(hit['publication_date'])
+                except:
+                    pass
+
+            doc = PolicyDocumentModel(
+                id=hit['id'],
+                source_id=hit.get('source_id', ''),
+                title=hit.get('title', ''),
+                description=hit.get('description', ''),
+                content_hash=hit.get('content_hash', ''),
+                document_url=hit.get('document_url', ''),
+                document_type=hit.get('document_type'),
+                municipality=hit.get('municipality'),
+                publication_date=pub_date,
+                effective_date=None,
+                file_size=hit.get('file_size'),
+                page_count=hit.get('page_count'),
+                language=hit.get('language', 'nl'),
+                status=hit.get('status', 'indexed'),
+                metadata=hit.get('metadata'),
+                created_at=hit.get('created_at', 0),
+                updated_at=hit.get('updated_at', 0),
+                indexed_at=hit.get('indexed_at')
+            )
+            documents.append(doc)
+
+        # Convert facets to SearchFacets format
+        facet_dist = results.get('facetDistribution', {})
+        facets = SearchFacets(
+            municipalities=[
+                SearchFacet(value=k, count=v)
+                for k, v in facet_dist.get('municipality', {}).items()
+            ],
+            categories=[
+                SearchFacet(value=k, count=v)
+                for k, v in facet_dist.get('category', {}).items()
+            ],
+            sources=[
+                SearchFacet(value=k, count=v)
+                for k, v in facet_dist.get('source_id', {}).items()
+            ]
         )
 
         # Calculate response time
-        took_ms = int((time.time() - start_time) * 1000)
+        took_ms = results.get('processingTimeMs', 0)
+        total_ms = int((time.time() - start_time) * 1000)
 
         # Record search query for analytics
         search_form = SearchQueryForm(
             query_text=request.query,
             filters=request.filters.model_dump() if request.filters else None,
-            search_type="keyword",  # For now, only keyword search
+            search_type="keyword",
         )
         SearchQueries.record_search(
             user_id=user.id,
             form_data=search_form,
-            result_count=len(documents),
-            response_time_ms=took_ms,
+            result_count=results.get('total', 0),
+            response_time_ms=total_ms,
         )
 
-        # Return response with empty facets (to be implemented in Phase 2)
+        log.info(
+            f"Search completed: {results.get('total', 0)} results in {took_ms}ms "
+            f"(total {total_ms}ms)"
+        )
+
+        # Return response
         return SearchResponse(
             results=documents,
-            total=len(documents),  # TODO: Implement proper count query
-            facets=SearchFacets(
-                sources=[],
-                municipalities=[],
-                categories=[],
-            ),
+            total=results.get('total', 0),
+            facets=facets,
             page=request.page,
             took_ms=took_ms,
         )
@@ -142,21 +225,48 @@ async def get_search_filters(
 ):
     """
     Get available filter options for search.
-    NOTE: This is a STUB implementation for Phase 1.
 
-    Returns:
-    - List of available municipalities
-    - List of available sources
-    - List of available categories
+    Returns facet counts from Meilisearch for:
+    - Municipalities
+    - Sources
+    - Categories
+    - Document types
     """
     try:
-        # TODO: Implement actual aggregation queries
-        # For now, return empty lists
+        from open_webui.services.meilisearch_service import get_meilisearch_service
+
+        # Get Meilisearch service
+        meili = get_meilisearch_service()
+        await meili.connect()
+
+        # Perform empty search to get all facets
+        results = await meili.search(
+            query='',
+            filters={},
+            page=1,
+            limit=1,
+            facets=['municipality', 'category', 'document_type', 'source_id']
+        )
+
+        facet_dist = results.get('facetDistribution', {})
+
         return {
-            "municipalities": [],
-            "sources": [],
-            "categories": [],
-            "document_types": ["pdf", "html", "docx", "xlsx"],
+            "municipalities": [
+                {"value": k, "count": v}
+                for k, v in facet_dist.get('municipality', {}).items()
+            ],
+            "sources": [
+                {"value": k, "count": v}
+                for k, v in facet_dist.get('source_id', {}).items()
+            ],
+            "categories": [
+                {"value": k, "count": v}
+                for k, v in facet_dist.get('category', {}).items()
+            ],
+            "document_types": [
+                {"value": k, "count": v}
+                for k, v in facet_dist.get('document_type', {}).items()
+            ],
         }
     except Exception as e:
         log.exception(f"Error getting search filters: {e}")
