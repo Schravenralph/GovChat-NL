@@ -13,8 +13,10 @@ from open_webui.models.policy_sources import (
     ScanJobModel,
     ScanJobForm,
 )
-from open_webui.utils.auth import get_verified_user, get_admin_user
+from open_webui.utils.auth import get_verified_user, get_current_user
+from open_webui.middleware.policy_auth import require_policy_permission, require_policy_admin
 from open_webui.constants import ERROR_MESSAGES
+from open_webui.constants.policy_permissions import PolicyPermissions
 from open_webui.env import SRC_LOG_LEVELS
 
 log = logging.getLogger(__name__)
@@ -28,13 +30,14 @@ router = APIRouter()
 
 
 @router.get("/", response_model=List[PolicySourceModel])
+@require_policy_permission(PolicyPermissions.MANAGE_SOURCES)
 async def get_policy_sources(
     active_only: bool = False,
-    user=Depends(get_admin_user),
+    user=Depends(get_current_user),
 ):
     """
     Get all policy sources.
-    Requires admin role.
+    Requires policy:manage_sources permission (admin only).
     """
     try:
         sources = PolicySources.get_sources(active_only=active_only)
@@ -48,13 +51,14 @@ async def get_policy_sources(
 
 
 @router.get("/{source_id}", response_model=PolicySourceModel)
+@require_policy_permission(PolicyPermissions.MANAGE_SOURCES)
 async def get_policy_source_by_id(
     source_id: str,
-    user=Depends(get_admin_user),
+    user=Depends(get_current_user),
 ):
     """
     Get a specific policy source by ID.
-    Requires admin role.
+    Requires policy:manage_sources permission (admin only).
     """
     try:
         source = PolicySources.get_source_by_id(source_id)
@@ -75,13 +79,14 @@ async def get_policy_source_by_id(
 
 
 @router.post("/", response_model=PolicySourceModel)
+@require_policy_permission(PolicyPermissions.MANAGE_SOURCES)
 async def create_policy_source(
     form_data: PolicySourceForm,
-    user=Depends(get_admin_user),
+    user=Depends(get_current_user),
 ):
     """
     Create a new policy source.
-    Requires admin role.
+    Requires policy:manage_sources permission (admin only).
     """
     try:
         source = PolicySources.insert_new_source(user.id, form_data)
@@ -102,14 +107,15 @@ async def create_policy_source(
 
 
 @router.post("/{source_id}/update", response_model=PolicySourceModel)
+@require_policy_permission(PolicyPermissions.MANAGE_SOURCES)
 async def update_policy_source(
     source_id: str,
     form_data: PolicySourceUpdate,
-    user=Depends(get_admin_user),
+    user=Depends(get_current_user),
 ):
     """
     Update a policy source.
-    Requires admin role.
+    Requires policy:manage_sources permission (admin only).
     """
     try:
         # Check if source exists
@@ -138,13 +144,14 @@ async def update_policy_source(
 
 
 @router.delete("/{source_id}/deactivate")
+@require_policy_permission(PolicyPermissions.MANAGE_SOURCES)
 async def deactivate_policy_source(
     source_id: str,
-    user=Depends(get_admin_user),
+    user=Depends(get_current_user),
 ):
     """
     Deactivate a policy source (soft delete).
-    Requires admin role.
+    Requires policy:manage_sources permission (admin only).
     """
     try:
         result = PolicySources.deactivate_source_by_id(source_id)
@@ -165,14 +172,15 @@ async def deactivate_policy_source(
 
 
 @router.delete("/{source_id}/delete")
+@require_policy_permission(PolicyPermissions.DELETE)
 async def delete_policy_source(
     source_id: str,
-    user=Depends(get_admin_user),
+    user=Depends(get_current_user),
 ):
     """
     Permanently delete a policy source.
     WARNING: This will cascade delete all related documents.
-    Requires admin role.
+    Requires policy:delete permission (admin only).
     """
     try:
         result = PolicySources.delete_source_by_id(source_id)
@@ -198,14 +206,15 @@ async def delete_policy_source(
 
 
 @router.post("/{source_id}/scan", response_model=ScanJobModel)
+@require_policy_permission(PolicyPermissions.TRIGGER_SCAN)
 async def trigger_scan_job(
     source_id: str,
     form_data: ScanJobForm,
-    user=Depends(get_admin_user),
+    user=Depends(get_current_user),
 ):
     """
     Trigger a manual scan job for a policy source.
-    Requires admin role.
+    Requires policy:trigger_scan permission (admin only).
     Returns job ID for status tracking.
     """
     try:
@@ -247,14 +256,15 @@ async def trigger_scan_job(
 
 
 @router.get("/{source_id}/scan/jobs", response_model=List[ScanJobModel])
+@require_policy_permission(PolicyPermissions.MANAGE_SOURCES)
 async def get_scan_jobs_for_source(
     source_id: str,
     limit: int = 10,
-    user=Depends(get_admin_user),
+    user=Depends(get_current_user),
 ):
     """
     Get recent scan jobs for a policy source.
-    Requires admin role.
+    Requires policy:manage_sources permission (admin only).
     """
     try:
         # Verify source exists
@@ -278,13 +288,14 @@ async def get_scan_jobs_for_source(
 
 
 @router.get("/scan/jobs/{job_id}", response_model=ScanJobModel)
+@require_policy_permission(PolicyPermissions.MANAGE_SOURCES)
 async def get_scan_job_status(
     job_id: str,
-    user=Depends(get_admin_user),
+    user=Depends(get_current_user),
 ):
     """
     Get status of a specific scan job.
-    Requires admin role.
+    Requires policy:manage_sources permission (admin only).
     """
     try:
         job = ScanJobs.get_scan_job_by_id(job_id)

@@ -20,8 +20,10 @@ from open_webui.models.policy_categories import (
     TagModel,
     DocumentCategoryForm,
 )
-from open_webui.utils.auth import get_verified_user, get_admin_user
+from open_webui.utils.auth import get_verified_user, get_current_user
+from open_webui.middleware.policy_auth import require_policy_permission
 from open_webui.constants import ERROR_MESSAGES
+from open_webui.constants.policy_permissions import PolicyPermissions
 from open_webui.env import SRC_LOG_LEVELS
 
 log = logging.getLogger(__name__)
@@ -35,13 +37,14 @@ router = APIRouter()
 
 
 @router.get("/{document_id}", response_model=PolicyDocumentModel)
+@require_policy_permission(PolicyPermissions.VIEW)
 async def get_document(
     document_id: str,
-    user=Depends(get_verified_user),
+    user=Depends(get_current_user),
 ):
     """
     Get a specific policy document by ID.
-    All authenticated users can access.
+    Requires policy:view permission (all authenticated users).
     """
     try:
         document = PolicyDocuments.get_document_by_id(document_id)
@@ -62,17 +65,18 @@ async def get_document(
 
 
 @router.get("/", response_model=List[PolicyDocumentModel])
+@require_policy_permission(PolicyPermissions.VIEW)
 async def get_documents(
     source_id: Optional[str] = None,
     municipality: Optional[str] = None,
     status_filter: Optional[str] = None,
     limit: int = 20,
     offset: int = 0,
-    user=Depends(get_verified_user),
+    user=Depends(get_current_user),
 ):
     """
     Get policy documents with optional filters.
-    All authenticated users can access.
+    Requires policy:view permission (all authenticated users).
     """
     try:
         documents = PolicyDocuments.get_documents(
@@ -92,13 +96,14 @@ async def get_documents(
 
 
 @router.post("/", response_model=PolicyDocumentModel)
+@require_policy_permission(PolicyPermissions.ADMIN)
 async def create_document(
     form_data: PolicyDocumentForm,
-    user=Depends(get_admin_user),
+    user=Depends(get_current_user),
 ):
     """
     Create a new policy document.
-    Requires admin role.
+    Requires policy:admin permission (admin only).
     """
     try:
         # Check for duplicates by content hash
@@ -127,14 +132,15 @@ async def create_document(
 
 
 @router.post("/{document_id}/update", response_model=PolicyDocumentModel)
+@require_policy_permission(PolicyPermissions.ADMIN)
 async def update_document(
     document_id: str,
     form_data: PolicyDocumentUpdate,
-    user=Depends(get_admin_user),
+    user=Depends(get_current_user),
 ):
     """
     Update a policy document.
-    Requires admin role.
+    Requires policy:admin permission (admin only).
     """
     try:
         document = PolicyDocuments.update_document_by_id(document_id, form_data)
@@ -160,12 +166,14 @@ async def update_document(
 
 
 @router.get("/{document_id}/categories", response_model=List[PolicyCategoryModel])
+@require_policy_permission(PolicyPermissions.VIEW)
 async def get_document_categories(
     document_id: str,
-    user=Depends(get_verified_user),
+    user=Depends(get_current_user),
 ):
     """
     Get all categories assigned to a document.
+    Requires policy:view permission (all authenticated users).
     """
     try:
         # Verify document exists
@@ -198,14 +206,15 @@ async def get_document_categories(
 
 
 @router.post("/{document_id}/categories")
+@require_policy_permission(PolicyPermissions.CATEGORIZE)
 async def assign_category_to_document(
     document_id: str,
     form_data: DocumentCategoryForm,
-    user=Depends(get_admin_user),
+    user=Depends(get_current_user),
 ):
     """
     Assign a category to a document.
-    Requires admin role.
+    Requires policy:categorize permission (admin only).
     """
     try:
         # Verify document exists
@@ -243,14 +252,15 @@ async def assign_category_to_document(
 
 
 @router.delete("/{document_id}/categories/{category_id}")
+@require_policy_permission(PolicyPermissions.CATEGORIZE)
 async def remove_category_from_document(
     document_id: str,
     category_id: str,
-    user=Depends(get_admin_user),
+    user=Depends(get_current_user),
 ):
     """
     Remove a category from a document.
-    Requires admin role.
+    Requires policy:categorize permission (admin only).
     """
     try:
         result = PolicyCategories.remove_category_from_document(document_id, category_id)
@@ -276,11 +286,13 @@ async def remove_category_from_document(
 
 
 @router.get("/favorites/list", response_model=List[PolicyDocumentModel])
+@require_policy_permission(PolicyPermissions.FAVORITE)
 async def get_user_favorites(
-    user=Depends(get_verified_user),
+    user=Depends(get_current_user),
 ):
     """
     Get all favorite documents for the current user.
+    Requires policy:favorite permission (all authenticated users).
     """
     try:
         favorites = PolicyDocuments.get_user_favorites(user.id)
@@ -294,13 +306,15 @@ async def get_user_favorites(
 
 
 @router.post("/{document_id}/favorite")
+@require_policy_permission(PolicyPermissions.FAVORITE)
 async def add_to_favorites(
     document_id: str,
     notes: Optional[str] = None,
-    user=Depends(get_verified_user),
+    user=Depends(get_current_user),
 ):
     """
     Add a document to user's favorites.
+    Requires policy:favorite permission (all authenticated users).
     """
     try:
         # Verify document exists
@@ -330,12 +344,14 @@ async def add_to_favorites(
 
 
 @router.delete("/{document_id}/favorite")
+@require_policy_permission(PolicyPermissions.FAVORITE)
 async def remove_from_favorites(
     document_id: str,
-    user=Depends(get_verified_user),
+    user=Depends(get_current_user),
 ):
     """
     Remove a document from user's favorites.
+    Requires policy:favorite permission (all authenticated users).
     """
     try:
         result = PolicyDocuments.remove_favorite(user.id, document_id)
@@ -362,11 +378,13 @@ async def remove_from_favorites(
 
 
 @router.get("/saved-searches/list", response_model=List[SavedSearchModel])
+@require_policy_permission(PolicyPermissions.SAVE_SEARCH)
 async def get_saved_searches(
-    user=Depends(get_verified_user),
+    user=Depends(get_current_user),
 ):
     """
     Get all saved searches for the current user.
+    Requires policy:save_search permission (all authenticated users).
     """
     try:
         searches = SavedSearches.get_user_saved_searches(user.id)
@@ -380,12 +398,14 @@ async def get_saved_searches(
 
 
 @router.post("/saved-searches", response_model=SavedSearchModel)
+@require_policy_permission(PolicyPermissions.SAVE_SEARCH)
 async def create_saved_search(
     form_data: SavedSearchForm,
-    user=Depends(get_verified_user),
+    user=Depends(get_current_user),
 ):
     """
     Create a new saved search for the current user.
+    Requires policy:save_search permission (all authenticated users).
     """
     try:
         search = SavedSearches.create_saved_search(user.id, form_data)
@@ -406,12 +426,14 @@ async def create_saved_search(
 
 
 @router.delete("/saved-searches/{search_id}")
+@require_policy_permission(PolicyPermissions.SAVE_SEARCH)
 async def delete_saved_search(
     search_id: str,
-    user=Depends(get_verified_user),
+    user=Depends(get_current_user),
 ):
     """
     Delete a saved search.
+    Requires policy:save_search permission (all authenticated users).
     """
     try:
         result = SavedSearches.delete_saved_search(search_id, user.id)

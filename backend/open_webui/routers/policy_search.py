@@ -11,8 +11,10 @@ from open_webui.models.policy_documents import (
     PolicyDocumentModel,
     SearchQueryForm,
 )
-from open_webui.utils.auth import get_verified_user
+from open_webui.utils.auth import get_verified_user, get_current_user
+from open_webui.middleware.policy_auth import require_policy_permission
 from open_webui.constants import ERROR_MESSAGES
+from open_webui.constants.policy_permissions import PolicyPermissions
 from open_webui.env import SRC_LOG_LEVELS
 
 log = logging.getLogger(__name__)
@@ -67,12 +69,14 @@ class SearchResponse(BaseModel):
 
 
 @router.post("/", response_model=SearchResponse)
+@require_policy_permission(PolicyPermissions.SEARCH)
 async def search_documents(
     request: SearchRequest,
-    user=Depends(get_verified_user),
+    user=Depends(get_current_user),
 ):
     """
     Search policy documents with filters using Meilisearch.
+    Requires policy:search permission (all authenticated users).
 
     Features:
     - Full-text search with typo tolerance
@@ -220,11 +224,13 @@ async def search_documents(
 
 
 @router.get("/filters", response_model=dict)
+@require_policy_permission(PolicyPermissions.SEARCH)
 async def get_search_filters(
-    user=Depends(get_verified_user),
+    user=Depends(get_current_user),
 ):
     """
     Get available filter options for search.
+    Requires policy:search permission (all authenticated users).
 
     Returns facet counts from Meilisearch for:
     - Municipalities
@@ -277,12 +283,14 @@ async def get_search_filters(
 
 
 @router.post("/semantic")
+@require_policy_permission(PolicyPermissions.SEARCH)
 async def semantic_search(
     request: SearchRequest,
-    user=Depends(get_verified_user),
+    user=Depends(get_current_user),
 ):
     """
     Semantic search using vector embeddings.
+    Requires policy:search permission (all authenticated users).
     NOTE: This is a STUB for Phase 3 (AI Features).
 
     Will be implemented with:

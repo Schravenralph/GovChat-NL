@@ -592,3 +592,51 @@ PIP_PACKAGE_INDEX_OPTIONS = os.getenv("PIP_PACKAGE_INDEX_OPTIONS", "").split()
 ####################################
 
 EXTERNAL_PWA_MANIFEST_URL = os.environ.get("EXTERNAL_PWA_MANIFEST_URL")
+
+
+####################################
+# POLICY SCANNER CONFIGURATION
+####################################
+
+# Enable/disable Policy Scanner feature
+POLICY_SCANNER_ENABLED = os.environ.get("POLICY_SCANNER_ENABLED", "True").lower() == "true"
+
+# Allow public search without authentication (default: False - require auth)
+POLICY_SCANNER_PUBLIC_SEARCH = os.environ.get("POLICY_SCANNER_PUBLIC_SEARCH", "False").lower() == "true"
+
+# Require admin permission for downloads (default: False - all users can download)
+POLICY_SCANNER_DOWNLOAD_REQUIRES_ADMIN = os.environ.get("POLICY_SCANNER_DOWNLOAD_REQUIRES_ADMIN", "False").lower() == "true"
+
+# Enable audit logging for Policy Scanner actions
+POLICY_SCANNER_AUDIT_LOG_ENABLED = os.environ.get("POLICY_SCANNER_AUDIT_LOG_ENABLED", "True").lower() == "true"
+
+# Number of days to retain audit logs (default: 90)
+try:
+    POLICY_SCANNER_AUDIT_LOG_RETENTION_DAYS = int(os.environ.get("POLICY_SCANNER_AUDIT_LOG_RETENTION_DAYS", "90"))
+except ValueError:
+    POLICY_SCANNER_AUDIT_LOG_RETENTION_DAYS = 90
+
+# Meilisearch configuration for Policy Scanner
+POLICY_SCANNER_MEILISEARCH_HOST = os.environ.get("POLICY_SCANNER_MEILISEARCH_HOST", "http://localhost:7700")
+POLICY_SCANNER_MEILISEARCH_API_KEY = os.environ.get("POLICY_SCANNER_MEILISEARCH_API_KEY", "")
+
+# Rate limiting for Policy Scanner (requests per minute)
+try:
+    POLICY_SCANNER_SEARCH_RATE_LIMIT = int(os.environ.get("POLICY_SCANNER_SEARCH_RATE_LIMIT", "30"))
+except ValueError:
+    POLICY_SCANNER_SEARCH_RATE_LIMIT = 30
+
+try:
+    POLICY_SCANNER_ADMIN_RATE_LIMIT = int(os.environ.get("POLICY_SCANNER_ADMIN_RATE_LIMIT", "5"))
+except ValueError:
+    POLICY_SCANNER_ADMIN_RATE_LIMIT = 5
+
+# Maximum search results per page
+try:
+    POLICY_SCANNER_MAX_RESULTS_PER_PAGE = int(os.environ.get("POLICY_SCANNER_MAX_RESULTS_PER_PAGE", "100"))
+except ValueError:
+    POLICY_SCANNER_MAX_RESULTS_PER_PAGE = 100
+
+log.info(f"POLICY_SCANNER_ENABLED: {POLICY_SCANNER_ENABLED}")
+log.info(f"POLICY_SCANNER_AUDIT_LOG_ENABLED: {POLICY_SCANNER_AUDIT_LOG_ENABLED}")
+log.info(f"POLICY_SCANNER_MEILISEARCH_HOST: {POLICY_SCANNER_MEILISEARCH_HOST}")
