@@ -1374,5 +1374,82 @@
 	"Your entire contribution will go directly to the plugin developer; Open WebUI does not take any percentage. However, the chosen funding platform might have its own fees.": "Je volledige bijdrage gaat direct naar de ontwikkelaar van de plugin; Open WebUI neemt hier geen deel van. Het gekozen financieringsplatform kan echter wel zijn eigen kosten hebben.",
 	"Youtube": "Youtube",
 	"Youtube Language": "Youtube-taal",
-	"Youtube Proxy URL": "Youtube-proxy-URL"
+	"Youtube Proxy URL": "Youtube-proxy-URL",
+	"policy": {
+		"navigation": {
+			"title": "Beleidsdocumenten"
+		},
+		"search": {
+			"title": "Beleidsdocumenten Zoeken",
+			"subtitle": "Zoek in beleidsdocumenten van Nederlandse gemeenten",
+			"placeholder": "Zoek in beleidsdocumenten...",
+			"search_button": "Zoeken",
+			"clear": "Wissen",
+			"search_hint": "Zoek op trefwoorden, gemeente, of documenttype",
+			"no_results": "Geen documenten gevonden",
+			"try_different_query": "Probeer een andere zoekopdracht",
+			"empty_state_title": "Welkom bij Beleidsdocumenten",
+			"empty_state_message": "Begin met zoeken om beleidsdocumenten te vinden",
+			"error": "Er is een fout opgetreden bij het zoeken"
+		},
+		"filters": {
+			"title": "Filters",
+			"clear_all": "Alles wissen",
+			"municipality": "Gemeente",
+			"category": "Categorie",
+			"document_type": "Documenttype",
+			"all_types": "Alle types",
+			"date_range": "Datumbereik",
+			"date_from": "Van",
+			"date_to": "Tot"
+		},
+		"results": {
+			"showing": "Toont",
+			"of": "van",
+			"results": "resultaten",
+			"sort_by": "Sorteer op",
+			"sort": {
+				"relevance": "Relevantie",
+				"date_desc": "Datum (nieuwste eerst)",
+				"date_asc": "Datum (oudste eerst)",
+				"title": "Titel"
+			}
+		},
+		"document": {
+			"back_to_search": "Terug naar zoekresultaten",
+			"error_title": "Fout bij laden van document",
+			"not_found": "Document niet gevonden",
+			"download": "Downloaden",
+			"downloading": "Bezig met downloaden...",
+			"download_started": "Download gestart",
+			"download_error": "Fout bij downloaden",
+			"favorite": "Favoriet",
+			"favorited": "Favoriet",
+			"add_favorite": "Toevoegen aan favorieten",
+			"added_to_favorites": "Toegevoegd aan favorieten",
+			"removed_from_favorites": "Verwijderd uit favorieten",
+			"favorite_error": "Fout bij toevoegen aan favorieten",
+			"view_original": "Bekijk origineel",
+			"metadata": "Metadata",
+			"additional_metadata": "Aanvullende metadata",
+			"fields": {
+				"municipality": "Gemeente",
+				"publication_date": "Publicatiedatum",
+				"effective_date": "Ingangsdatum",
+				"document_type": "Documenttype",
+				"file_size": "Bestandsgrootte",
+				"page_count": "Aantal pagina's",
+				"pages": "pagina's",
+				"language": "Taal",
+				"status": "Status"
+			}
+		},
+		"saved_searches": {
+			"title": "Opgeslagen zoekopdrachten",
+			"delete": "Verwijderen",
+			"deleted": "Zoekopdracht verwijderd",
+			"delete_error": "Fout bij verwijderen",
+			"confirm_delete": "Weet je zeker dat je deze zoekopdracht wilt verwijderen?"
+		}
+	}
 }
